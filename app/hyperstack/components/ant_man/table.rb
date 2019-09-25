@@ -43,7 +43,7 @@ module AntMan
     def normalize_pass_through_column(column)
       column.dup.tap do |c|
         c[:render] &&=
-          ->(_, r, i) { column[:render].call(c[:key], `#{r}.key`, i).to_n }
+          ->(_, r, i) { column[:render].call(c[:key], records[i], i).to_n }
         c[:title] ||=
           c[:key].humanize
       end
@@ -73,7 +73,7 @@ module AntMan
 
     def format_data_source
       records.collect do |record|
-        Hash[[[:key, record]] + gather_values(record)]
+        Hash[[[:key, record.to_key.to_s]] + gather_values(record)]
       end
     end
 
