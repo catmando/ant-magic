@@ -1,0 +1,17 @@
+{
+  "name": "ant-magic",
+  "private": true,
+  "dependencies": {
+    "@rails/webpacker": "^4.0.7",
+    "antd": "^3.23.4",
+    "jquery": "^3.4.1",
+    "react": "16",
+    "react-dom": "16",
+    "react-router": "^5.0.0",
+    "react-router-dom": "^5.0.0",
+    "react_ujs": "^2.5.0"
+  },
+  "devDependencies": {
+    "webpack-dev-server": "^3.8.1"
+  }
+}
