@@ -4,16 +4,25 @@ module AntMan
     param :records # any collection of ActiveRecord like objects
     param :columns # array of column descriptions (see below for details)
 
-    others :etc    # any other params to pass to Ant::Table
-
-    # each column is described in one of three ways:
-
     # [
-    #   :simple_attribute,  # will fetch simple_attribute from the record (i.e. record.simple_attribute)
-    #                       # the header will be the humanized value i.e. Simple Attribute
-    #   {title: 'Custom Title', value: :simple_attribute },    # if you want a different title
-    #   {title: 'Count of Friends', value: [:friends, :count]} # if you want a complex chain of expressions
+    #   # columns can can simply be the name of the attribute.  The column header
+    #   # will be the humanized attribute name (i.e. Name)
+    #   'name',
+    #   # give the title a different value than implied by the attribute
+    #   { title: 'Years', value: 'age' },
+    #   # allows chained expressions like ['friends', 'count'] etc
+    #   { title: 'Address', value: ['address'] },
+    #   # if no value key is given then we treat it as a full on Ant Table
+    #   # column description.  If no title is given it will be the humanized key.
+    #   { key: :action, render: method(:delete_btn) }
     # ]
+
+    fires :expand_row # the optional expand_row event will receive the record,
+                      # and should return a react element to display
+
+
+    others :etc       # any other params to pass to Ant::Table
+
 
     before_update do
       # typically columns will not change, so we cache the last value computed
@@ -43,7 +52,7 @@ module AntMan
     def normalize_pass_through_column(column)
       column.dup.tap do |c|
         c[:render] &&=
-          ->(_, r, i) { column[:render].call(c[:key], records[i], i).to_n }
+          ->(_, _r, i) { column[:render].call(records[i], i).to_n }
         c[:title] ||=
           c[:key].humanize
       end
@@ -73,6 +82,7 @@ module AntMan
 
     def format_data_source
       records.collect do |record|
+        # its critical that the key is a string for Ant::Table to work
         Hash[[[:key, record.to_key.to_s]] + gather_values(record)]
       end
     end
@@ -81,8 +91,13 @@ module AntMan
       Ant::Table(
         etc,
         dataSource: format_data_source.to_n,
-        columns: formatted_columns.to_n
-      )
+        columns: formatted_columns.to_n,
+      ) # if expand_row handler is provided add the expandedRowRender
+      .on(props[:on_expand_row] && '<expandedRowRender>') do |_, i|
+        # the above looks a little clunky - see https://github.com/hyperstack-org/hyperstack/issues/247
+        # which would give us expand_row_provided?
+        expand_row!(records[i]).to_n
+      end
     end
   end
 end

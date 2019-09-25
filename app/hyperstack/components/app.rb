@@ -8,7 +8,7 @@ class App < HyperComponent
   # define a method to generate the delete button which we will pass along
   # as the "value" of the Action column below
 
-  def self.delete_btn(_key, record, _index)
+  def self.delete_btn(record)
     Ant::Button(type: :danger) { 'delete' }.on(:click) { record.destroy }
   end
 
@@ -48,6 +48,7 @@ class App < HyperComponent
     if resources_loaded?
       # once resources are loaded display the table
       AntMan::Table(records: Person.all, columns: COLUMNS)
+      .on(:expand_row) { |record| record.inspect.span }
     else
       # otherwise display the standard Ant spinner
       Ant::Spin(size: :large)
