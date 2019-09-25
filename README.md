@@ -20,3 +20,5 @@ We also demonstrate how to use the `WhileLoading` module to dynamically replace 
 loading.
 
 Like any Hyperstack app, data synchronization between all clients and the server is automatic.
+
+> NOTE:  Normally it take just a 100 Milliseconds or so to load data, so you might not see the `while loading` spinner.  To make it more visible the `Person` model artificially slows down the load of data.  You can comment this out by visiting `app/hyperstack/models/person.rb`
