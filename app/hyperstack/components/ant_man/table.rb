@@ -24,15 +24,28 @@ module AntMan
 
     def normalized_columns
       @normalized_columns ||= columns.collect do |column|
-        if !column.is_a?(Hash)
-          { title: column.humanize, value: [column] }
-        elsif column[:value].is_a? Array
-          column
-        elsif column[:value]
-          { title: column[:title], value: [column[:value]] }
-        else
-          column
-        end
+        normalize_column column
+      end
+    end
+
+    def normalize_column(column)
+      if !column.is_a?(Hash)
+        { title: column.humanize, value: [column] }
+      elsif column[:value].is_a? Array
+        column
+      elsif column[:value]
+        { title: column[:title], value: [column[:value]] }
+      else
+        normalize_pass_through_column column
+      end
+    end
+
+    def normalize_pass_through_column(column)
+      column.dup.tap do |c|
+        c[:render] &&=
+          ->(_, r, i) { column[:render].call(c[:key], `#{r}.key`, i).to_n }
+        c[:title] ||=
+          c[:key].humanize
       end
     end
 

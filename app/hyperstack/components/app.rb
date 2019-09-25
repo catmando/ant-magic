@@ -8,14 +8,8 @@ class App < HyperComponent
   # define a method to generate the delete button which we will pass along
   # as the "value" of the Action column below
 
-  def self.delete_btn(_text, js_data)
-    # The AntMan wrapper will add a "key" in each js data set pointing back to
-    # the original active record instance.  We can use this to figure out which
-    # record we are talking about, and destroy it using the normal AR destroy method.
-    Ant::Button(type: :danger) { 'delete' }
-    .on(:click) { `js_data.key`.destroy }
-    .to_n
-    # because we are passing the button back to Ant we have to apply `to_n`
+  def self.delete_btn(_key, record, _index)
+    Ant::Button(type: :danger) { 'delete' }.on(:click) { record.destroy }
   end
 
   # Define the columns to display.  Each element in the array defines a column
@@ -24,23 +18,31 @@ class App < HyperComponent
   # component.
 
   COLUMNS = [
-    'name',                                   # simple format, the title will be the humanized attribute name
-    { title: 'Years', value: 'age' },         # give the title a different value than implied by the attribute
-    { title: 'Address', value: ['address'] }, # allows chained expressions like ['friends', 'count'] etc
-    { title: 'Action',                        # anything without a value key will be passed along to Ant without
-      key: :action,                           # any processing
-      render: method(:delete_btn).to_proc }
+    # columns can can simply be the name of the attribute.  The column header
+    # will be the humanized attribute name (i.e. Name)
+    'name',
+    # give the title a different value than implied by the attribute
+    { title: 'Years', value: 'age' },
+    # allows chained expressions like ['friends', 'count'] etc
+    { title: 'Address', value: ['address'] },
+    # if no value key is given then we treat it as a full on Ant Table
+    # column description.  If no title is given it will be the humanized key.
+    { key: :action, render: method(:delete_btn) }
   ]
 
   # The WhileLoading module will cause the component to render 3 times:
-  # The initial render will attempt to display the table, but will fail because data is loading
-  # then the second render will display the spinner
-  # finally when the data is loaded we will render a 3rd time with the actual data
+  #
+  # 1 - The initial render will render to the virtual DOM using dummy data
+  #     but will fail before completing the render because data is loading
+  # 2 - then the second render will complete and display the spinner
+  # 3 - finally when the data is loaded we will render a 3rd time with the
+  #     actual data.
 
-  # The first render which is never actually displayed is what collects the graph of data
-  # that we will need.
+  # The first render which is never actually displayed is what collects the
+  # graph of data that we will need.
 
-  # Note that the experimental "FreeRender" module allows us to skip the render method.
+  # Note that the experimental "FreeRender" module allows us to skip the render
+  # method.
 
   DIV(style: { padding: 50 }) do
     if resources_loaded?
@@ -52,5 +54,4 @@ class App < HyperComponent
     end
     AddRecord()
   end
-
 end
