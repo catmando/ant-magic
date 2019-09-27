@@ -72,7 +72,7 @@ module AntMan
     end
 
     def gather_values(record)
-      normalized_columns.collect do |column|
+      normalized_columns.collect do |column, i|
         [
           column[:value].join('-'),
           column[:value].inject(record) { |value, expr| value.send(expr) }
@@ -81,13 +81,18 @@ module AntMan
     end
 
     def format_data_source
-      records.collect do |record|
+      records.collect do |record, i|
+        # this works around issue https://github.com/hyperstack-org/hyperstack/issues/254
+        columns.each { |column| column[:render]&.call(record)&.as_node }
+        expand_row!(record).as_node rescue nil
+        
         # its critical that the key is a string for Ant::Table to work
-        Hash[[[:key, record.to_key.to_s]] + gather_values(record)]
+        Hash[[[:key, record.to_key.to_s]] + gather_values(record, i)]
       end
     end
 
     render do
+
       Ant::Table(
         etc,
         dataSource: format_data_source.to_n,

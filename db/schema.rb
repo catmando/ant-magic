@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2019_09_25_002034) do
+ActiveRecord::Schema.define(version: 2019_09_25_185247) do
 
   create_table "hyperstack_connections", force: :cascade do |t|
     t.string "channel"
@@ -31,6 +31,15 @@ ActiveRecord::Schema.define(version: 2019_09_25_002034) do
     t.string "address"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "tasks", force: :cascade do |t|
+    t.string "title"
+    t.boolean "completed", default: false, null: false
+    t.integer "owner_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["owner_id"], name: "index_tasks_on_owner_id"
   end
 
 end

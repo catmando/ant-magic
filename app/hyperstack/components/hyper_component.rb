@@ -7,4 +7,6 @@ class HyperComponent
   # The following turns on the new style param accessor
   # i.e. param :foo is accessed by the foo method
   param_accessor_style :accessors
+  # experimental module eliminates need for the render method
+  include Hyperstack::Component::FreeRender
 end
