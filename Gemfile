@@ -62,6 +62,7 @@ end
 gem 'tzinfo-data', platforms: [:mingw, :mswin, :x64_mingw, :jruby]
 
 gem "rails-hyperstack", "~> 1.0.alpha.alpha1.5"
+#gem 'hyper-component', path: '../../hyperstack', glob: 'ruby/*/*.gemspec'
 
 group :development do
   gem 'foreman'

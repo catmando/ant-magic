@@ -36,7 +36,7 @@ class Ant < Hyperstack::Component::NativeLibrary
     before_update do
       # typically columns will not change, so we cache the last value computed
       # and only recompute if columns actually changes
-      @normalized_columns = @formatted_columns = nil unless @columns == columns
+      @normalized_columns = nil unless @columns == columns
       @columns = columns
     end
 
@@ -46,37 +46,65 @@ class Ant < Hyperstack::Component::NativeLibrary
       end.compact
     end
 
+    def get_data(r, c)
+      # during the conversion from ruby hash to json object, nil will be converted
+      # to null.  Coming back it doesn't work, since JS null has no properties.  So
+      # we have this little helper function to grab the value and check it for null.
+      v = `r[#{c[:dataIndex]}]`
+      v = nil if `v == null`
+      v
+    end
+
+    def set_title_and_value(column, c)
+      if column[:value]
+        c[:title] ||= column[:value].humanize
+        c[:value] = column[:value].split('.')
+      else
+        c[:title] ||= c[:key].humanize if c[:key]
+      end
+    end
+
+    def camelize_keys(column, c)
+      c.keys.each { |key| c[key.camelize(:lower)] = c[key] }
+    end
+
+    def set_data_index(column, c)
+      c[:dataIndex] ||= c[:value].join('-') if c[:value]
+    end
+
+    def wrap_render_proc(column, c)
+      c[:render] &&=
+        ->(_, r, i) { column[:render].call( `r['_record']`, i).to_n }
+    end
+
+    def wrap_filter_proc(column, c)
+      if column[:filter]
+        c[:onFilter] = ->(v, r) { column[:filter].call(v, `r['_record']`) }
+      elsif column[:filters]
+        c[:onFilter] = ->(v, r) { get_data(r, c) == v }
+      end
+    end
+
+    def wrap_sorter_proc(column, c)
+      return unless column[:sorter]
+
+      if column[:sorter].respond_to? :call
+        c[:sorter] = ->(a, b, o) { column[:sorter].call(`a['_record']`, `b['_record']`, o) }
+      else
+        c[:sorter] = ->(a, b) { get_data(a, c) <=> get_data(b, c) }
+      end
+    end
+
     def normalize_column(column)
       return { title: column.humanize, value: column.split('.') } unless column.is_a?(Hash)
 
-      if column[:value]
-        column = column.merge(
-          title: column[:title] || column[:value], value: column[:value].split('.')
-        )
-      end
-      normalize_pass_through_values column
-    end
-
-    def normalize_pass_through_values(column)
       column.dup.tap do |c|
-        c[:render] &&=
-          ->(_, r, i) { column[:render].call( `r['_record']`, i).to_n }
-        c[:title] ||= c[:key].humanize if c[:key]
-        c[:onFilter] = ->(v, r) { column[:filter].call(v, `r['_record']`)} if column[:filter]
-        c.keys.each { |key| c[key.camelize(:lower)] = c[key] }
-      end
-    end
-
-    def formatted_columns
-      @formatted_columns ||= normalized_columns.collect do |column|
-        if column[:value]
-          {
-            title:     column[:title],
-            dataIndex: column[:value].join('-')
-          }
-        else
-          column
-        end
+        set_title_and_value(column, c)
+        wrap_render_proc(column, c)
+        camelize_keys(column, c)
+        set_data_index(column, c)
+        wrap_filter_proc(column, c)
+        wrap_sorter_proc(column, c)
       end
     end
 
@@ -105,7 +133,7 @@ class Ant < Hyperstack::Component::NativeLibrary
         etc,
         accordion && { expandedRowKeys: @expanded_row_keys || [] },
         dataSource: format_data_source.to_n,
-        columns: formatted_columns.to_n
+        columns: normalized_columns.to_n
       ) # if expand_row handler is provided add the expandedRowRender
       .on(props[:on_expand_row] && '<expandedRowRender>') do |r, i|
         # the above looks a little clunky - see https://github.com/hyperstack-org/hyperstack/issues/247
