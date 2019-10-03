@@ -48,6 +48,7 @@ group :development do
   # Spring speeds up development by keeping your application running in the background. Read more: https://github.com/rails/spring
   gem 'spring'
   gem 'spring-watcher-listen', '~> 2.0.0'
+  gem 'pry'
 end
 
 group :test do
@@ -62,7 +63,7 @@ end
 gem 'tzinfo-data', platforms: [:mingw, :mswin, :x64_mingw, :jruby]
 
 gem "rails-hyperstack", "~> 1.0.alpha.alpha1.5"
-#gem 'hyper-component', path: '../../hyperstack', glob: 'ruby/*/*.gemspec'
+# gem 'hyper-model', path: '../../hyperstack', glob: 'ruby/*/*.gemspec'
 
 group :development do
   gem 'foreman'

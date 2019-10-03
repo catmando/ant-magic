@@ -5,5 +5,6 @@ History = require('history');                  // react-router history library
 ReactRouter = require('react-router');         // react-router js library
 ReactRouterDOM = require('react-router-dom');  // react-router DOM interface
 ReactRailsUJS = require('react_ujs');          // interface to react-rails
+createReactClass = require('create-react-class')
 // to add additional NPM packages run `yarn add package-name@version`
 // then add the require here.

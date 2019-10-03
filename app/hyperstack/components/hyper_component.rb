@@ -11,71 +11,18 @@ class HyperComponent
   include Hyperstack::Component::FreeRender
 end
 
-# patch for issue https://github.com/hyperstack-org/hyperstack/issues/256
-
-module Hyperstack
-  module Internal
-    module Component
-      class WhileLoadingWrapper < RescueWrapper
-        render do
-          if @waiting_on_resources && !quiet?
-            RenderingContext.raise_if_not_quiet = false
-          else
-            @waiting_on_resources = false
-            @Child.instance_eval do
-              mutate if @__hyperstack_while_loading_waiting_on_resources
-              @__hyperstack_while_loading_waiting_on_resources = false
-            end
-            RenderingContext.raise_if_not_quiet = self
-          end
-          RescueMetaWrapper(children_elements: @ChildrenElements)
+# patch for https://github.com/hyperstack-org/hyperstack/issues/255
+module ReactiveRecord
+  module Getters
+    def get_has_many(assoc, reload = nil)
+      getter_common(assoc.attribute, reload) do |_has_key, attr|
+        if new?
+          @attributes[attr] = Collection.new(assoc.klass, @ar_instance, assoc)
+        else
+          sync_attribute attr, Collection.new(assoc.klass, @ar_instance, assoc, *vector, attr)
         end
-
-        send("_before_mount_callbacks").clear #{callback_name}_callbacks
-
-        before_mount do
-          @Child.class.rescues RenderingContext::NotQuiet do |e|
-            e.while_loading_rescue_wrapper.instance_variable_set(:@waiting_on_resources, true)
-            @__hyperstack_while_loading_waiting_on_resources = true
-          end
-        end
-
-        after_render do
-          RenderingContext.raise_if_not_quiet = false
-        end
-      end
-    end
-  end
-end
-
-module Hyperstack
-  module Internal
-    module Component
-      class RenderingContext
-        class NotQuiet < Exception
-          attr_reader :while_loading_rescue_wrapper
-          def initialize(component, wrapper)
-            @while_loading_rescue_wrapper = wrapper
-            super("#{component} is waiting on resources - this should never happen")
-          end
-        end
-        class << self
-          attr_accessor :waiting_on_resources
-
-          def raise_if_not_quiet?
-            @while_loading_rescue_wrapper
-          end
-
-          def raise_if_not_quiet=(wrapper)
-            @while_loading_rescue_wrapper = wrapper
-          end
-
-          def quiet_test(component)
-            return unless component.waiting_on_resources && raise_if_not_quiet? #&& component.class != RescueMetaWrapper <- WHY  can't create a spec that this fails without this, but several fail with it.
-            raise NotQuiet.new(component, @while_loading_rescue_wrapper)
-          end
-        end
-      end
+        # getter_common returns nil on destroyed records, so we return empty collection instead
+      end || Collection.new(assoc.klass, @ar_instance, assoc)
     end
   end
 end

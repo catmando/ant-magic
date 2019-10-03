@@ -8,6 +8,7 @@ class Ant < Hyperstack::Component::NativeLibrary
 
   # Wrapper for Ant Table component so it works with AR records
   class Table < HyperComponent
+
     param :records          # any collection of ActiveRecord like objects
     param :columns          # array of column descriptions (see below for details)
     param accordion: false # true if only one row can be expanded at a time
@@ -36,23 +37,38 @@ class Ant < Hyperstack::Component::NativeLibrary
     before_update do
       # typically columns will not change, so we cache the last value computed
       # and only recompute if columns actually changes
-      @normalized_columns = nil unless @columns == columns
+      puts "before update - new columns? #{@columns != columns}"
+      @normalized_columns = @native_columns = nil unless @columns == columns
       @columns = columns
     end
 
     def normalized_columns
+      puts "getting normalized columns. Current Value:  #{@normalized_columns}"
       @normalized_columns ||= columns.collect do |column|
         normalize_column column if column
       end.compact
     end
 
-    def get_data(r, c)
+    NATIVE_COLUMN_KEYS = %i[
+      align className colSpan dataIndex defaultSortOrder filterDropdown
+      filterDropdownVisible filtered filteredValue filterIcon filterMultiple
+      filters fixed key render sorter sortOrder sortDirections title width
+      onCell onFilter onFilterDropdownVisibleChange
+    ]
+
+    def native_columns
+      @native_columns ||= normalized_columns.collect do |column|
+        column.dup.tap do |native_column|
+          native_column.delete_if { |k, _v| !NATIVE_COLUMN_KEYS.include?(k) }
+        end
+      end.to_n
+    end
+
+    def get_data(_r, c)
       # during the conversion from ruby hash to json object, nil will be converted
       # to null.  Coming back it doesn't work, since JS null has no properties.  So
       # we have this little helper function to grab the value and check it for null.
-      v = `r[#{c[:dataIndex]}]`
-      v = nil if `v == null`
-      v
+      `_r[#{c[:dataIndex]}] || #{nil}`
     end
 
     def set_title_and_value(column, c)
@@ -64,17 +80,17 @@ class Ant < Hyperstack::Component::NativeLibrary
       end
     end
 
-    def camelize_keys(column, c)
+    def camelize_keys(_, c)
       c.keys.each { |key| c[key.camelize(:lower)] = c[key] }
     end
 
-    def set_data_index(column, c)
+    def set_data_index(_, c)
       c[:dataIndex] ||= c[:value].join('-') if c[:value]
     end
 
     def wrap_render_proc(column, c)
       c[:render] &&=
-        ->(_, r, i) { column[:render].call( `r['_record']`, i).to_n }
+        ->(_, _r, i) { column[:render].call( `_r['_record']`, i).to_n }
     end
 
     def wrap_filter_proc(column, c)
@@ -90,6 +106,8 @@ class Ant < Hyperstack::Component::NativeLibrary
 
       if column[:sorter].respond_to? :call
         c[:sorter] = ->(a, b, o) { column[:sorter].call(`a['_record']`, `b['_record']`, o) }
+      elsif c[:sorter] == :remote
+        c[:sorter] = true
       else
         c[:sorter] = ->(a, b) { get_data(a, c) <=> get_data(b, c) }
       end
@@ -110,10 +128,12 @@ class Ant < Hyperstack::Component::NativeLibrary
 
     def gather_values(record)
       normalized_columns.collect do |column|
+        next unless column[:value]
+
         [
           column[:value].join('-'),
-          column[:value].inject(record) { |value, expr| value.send(expr) }
-        ] if column[:value]
+          column[:value].inject(record) { |value, expr| value.send(expr) if value }
+        ]
       end.compact
     end
 
@@ -128,12 +148,29 @@ class Ant < Hyperstack::Component::NativeLibrary
       end
     end
 
-    render do
+    def data_source_loaded?(data_source)
+      !data_source.detect { |column| column.values.detect(&:loading?) }
+    end
+
+    def current_data_source
+      new_data_source = format_data_source
+      if data_source_loaded?(new_data_source)
+        @previous_data_source = @current_data_source
+        @current_data_source = new_data_source.to_n
+        { dataSource: @current_data_source }
+      elsif @previous_data_source
+        { dataSource: @previous_data_source, loading: true }
+      else
+        { dataSource: [], loading: true }
+      end
+    end
+
+    render(DIV) do
       Ant::NativeTable(
         etc,
         accordion && { expandedRowKeys: @expanded_row_keys || [] },
-        dataSource: format_data_source.to_n,
-        columns: normalized_columns.to_n
+        current_data_source,
+        columns: native_columns
       ) # if expand_row handler is provided add the expandedRowRender
       .on(props[:on_expand_row] && '<expandedRowRender>') do |r, i|
         # the above looks a little clunky - see https://github.com/hyperstack-org/hyperstack/issues/247
@@ -143,7 +180,6 @@ class Ant < Hyperstack::Component::NativeLibrary
       .on(accordion && '<onExpandedRowsChange>') do |keys|
         mutate @expanded_row_keys = keys[-1..-1]
       end
-
     end
   end
 end

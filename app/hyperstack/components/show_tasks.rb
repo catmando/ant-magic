@@ -1,6 +1,4 @@
 class ShowTasks < HyperComponent
-  include Hyperstack::Component::WhileLoading
-
   param owner: nil  # optionally specify which owner to show tasks for
 
   def update_complete_state(task)
@@ -8,8 +6,13 @@ class ShowTasks < HyperComponent
     .on(:change) { task.update(completed: !task.completed) }
   end
 
-  def delete_task(task)
-    Ant::Button(type: :danger) { 'delete' }.on(:click) { task.destroy }
+  def actions(task)
+    DIV do
+      Ant::Button(type: :danger) { 'delete' }.on(:click) { task.destroy }
+      if task.owner
+        Ant::Button(type: :danger) { 'unlink' }.on(:click) { task.update(owner_id: nil) }
+      end
+    end
   end
 
   def priority_filter
@@ -29,7 +32,7 @@ class ShowTasks < HyperComponent
         filter_multiple: false,
         filter: ->(value, record) { record.completed == value }
       },
-      { key: :action, render: method(:delete_task) }
+      { key: :action, render: method(:actions) }
     ]
   end
 
@@ -38,9 +41,7 @@ class ShowTasks < HyperComponent
   end
 
   DIV do
-    next Ant::Spin() unless resources_loaded?
-
     Ant::Table(records: tasks, columns: columns)
-    AddTask(owner: owner)
+    AddTask(owner: owner) unless owner == :none
   end
 end
