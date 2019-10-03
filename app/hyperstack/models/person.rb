@@ -7,8 +7,8 @@ class Person < ApplicationRecord
         '  SELECT tasks.owner_id as owner_id, COUNT(tasks.owner_id) as task_count '\
         '  FROM tasks'\
         '  WHERE tasks.completed = false'\
-        '  GROUP BY tasks.owner_id) '\
-        "ON people.id == owner_id ORDER BY task_count #{order}"
+        '  GROUP BY tasks.owner_id) as incomplete_task_counts '\
+        "ON people.id = incomplete_task_counts.owner_id ORDER BY task_count #{order}"
       )
     end
   )
