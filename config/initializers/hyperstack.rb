@@ -49,7 +49,7 @@ module Hyperstack
     webpack_imports.each do |file|
       puts "inserting > import #{file}, client_only: #{!!(file =~ /^client_only/)}, at_head: true"
       import file, client_only: !!(file =~ /^client_only/), at_head: true
-    end
+    end 
     # import client_only_manifest.split("/").last, client_only: true, at_head: true if client_only_manifest
     # import client_and_server_manifest.split("/").last, at_head: true if client_and_server_manifest
   end
