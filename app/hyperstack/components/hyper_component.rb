@@ -26,25 +26,3 @@ module ReactiveRecord
     end
   end
 end
-
-module Hyperstack
-  def self.handle_webpack
-    puts "************** Running patched Hyperstack.handle_webpack ******************"
-    return unless defined? Webpacker
-
-    webpack_imports = %w[client_only.js client_and_server.js client_only.css client_and_server.css].collect do |file|
-      Webpacker.manifest.lookup(file)&.split('/')&.last
-    end.compact
-    puts "found these manifests #{webpack_imports}"
-    return if webpack_imports.empty?
-
-
-    cancel_webpack_imports
-    webpack_imports.each do |file|
-      puts "inserting > import #{file}, client_only: #{!!(file =~ '^client_only')}, at_head: true"
-      import file, client_only: !!(file =~ '^client_only'), at_head: true
-    end
-    # import client_only_manifest.split("/").last, client_only: true, at_head: true if client_only_manifest
-    # import client_and_server_manifest.split("/").last, at_head: true if client_and_server_manifest
-  end
-end
