@@ -4,13 +4,6 @@ ReactDOM = require('react-dom');               // react-js client side code
 jQuery = require('jquery');                    // remove if you don't need jQuery
 // to add additional NPM packages call run yarn add package-name@version
 // then add the require here.
-// import * as Ant from 'antd';
-// import 'antd/dist/antd.css';
-//
-// //import moment from 'moment';
-//
-// global.Ant = Ant;
-//global.moment = moment;
 Ant = require('antd');
 Ant.default = Ant;
 

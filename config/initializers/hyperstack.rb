@@ -7,7 +7,7 @@ Hyperstack.component_base_class = 'HyperComponent' # i.e. 'ApplicationComponent'
 # prerendering is default :off, you should wait until your
 # application is relatively well debugged before turning on.
 
-Hyperstack.prerendering = :on # or :on
+Hyperstack.prerendering = :off # or :on
 
 # transport controls how push (websocket) communications are
 # implemented.  The default is :action_cable.

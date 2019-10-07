@@ -37,13 +37,11 @@ class Ant < Hyperstack::Component::NativeLibrary
     before_update do
       # typically columns will not change, so we cache the last value computed
       # and only recompute if columns actually changes
-      puts "before update - new columns? #{@columns != columns}"
       @normalized_columns = @native_columns = nil unless @columns == columns
       @columns = columns
     end
 
     def normalized_columns
-      puts "getting normalized columns. Current Value:  #{@normalized_columns}"
       @normalized_columns ||= columns.collect do |column|
         normalize_column column if column
       end.compact
