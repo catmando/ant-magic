@@ -4,5 +4,4 @@ class Task < ApplicationRecord
   scope :incomplete, -> { where(completed: false) }
   PRIORITIES = %w[CRITICAL MAJOR ORDINARY]
   scope :with_priority, ->(priority) { where(priority: priority.upcase) }
-  scope :orphans, -> { unscoped.where(owner: nil) }
 end

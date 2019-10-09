@@ -1,7 +1,7 @@
 # Wrap the Ant Library
 # Most of the Ant Components can be used as is.
 # However Ant::Table needs some massaging of the data
-# To make it easier to use.
+# To make it easier to use, and can be used directly with Active Records
 class Ant < Hyperstack::Component::NativeLibrary
   imports 'Ant'
   rename Table: :NativeTable
@@ -11,7 +11,7 @@ class Ant < Hyperstack::Component::NativeLibrary
 
     param :records          # any collection of ActiveRecord like objects
     param :columns          # array of column descriptions (see below for details)
-    param accordion: false # true if only one row can be expanded at a time
+    param accordion: false  # true if only one row can be expanded at a time
 
     # [
     #   # columns can can simply be the name of the attribute.  The column header
@@ -19,8 +19,8 @@ class Ant < Hyperstack::Component::NativeLibrary
     #   'name',
     #   # give the title a different value than implied by the attribute
     #   { title: 'Years', value: 'age' },
-    #   # allows chained expressions like ['friends', 'count'] etc
-    #   { title: 'Address', value: ['address'] },
+    #   # value can be a chain of expressions
+    #   { title: 'Address', value: 'friends.count'] },
     #   # if no value key is given then we treat it as a full on Ant Table
     #   # column description.  If no title is given it will be the humanized key.
     #   { key: :action, render: method(:delete_btn) }
@@ -62,19 +62,19 @@ class Ant < Hyperstack::Component::NativeLibrary
       end.to_n
     end
 
-    def get_data(_r, c)
+    def get_data(_r, col)
       # during the conversion from ruby hash to json object, nil will be converted
       # to null.  Coming back it doesn't work, since JS null has no properties.  So
       # we have this little helper function to grab the value and check it for null.
-      `_r[#{c[:dataIndex]}] || #{nil}`
+      `_r[#{col[:dataIndex]}] || #{nil}`
     end
 
     def set_title_and_value(column, c)
       if column[:value]
         c[:title] ||= column[:value].humanize
         c[:value] = column[:value].split('.')
-      else
-        c[:title] ||= c[:key].humanize if c[:key]
+      elsif c[:key]
+        c[:title] ||= c[:key].humanize
       end
     end
 
@@ -169,7 +169,7 @@ class Ant < Hyperstack::Component::NativeLibrary
         accordion && { expandedRowKeys: @expanded_row_keys || [] },
         current_data_source,
         columns: native_columns
-      ) # if expand_row handler is provided add the expandedRowRender
+      ) # if expand_row handler is provided add the expandedRowRender callback
       .on(props[:on_expand_row] && '<expandedRowRender>') do |r, i|
         # the above looks a little clunky - see https://github.com/hyperstack-org/hyperstack/issues/247
         # which would give us expand_row_provided?

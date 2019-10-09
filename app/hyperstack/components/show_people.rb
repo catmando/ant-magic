@@ -1,7 +1,7 @@
 class ShowPeople < HyperComponent
   def delete_person(person)
     title = "#{person.name} has #{pluralize(person.tasks.incomplete.count, 'task')} "\
-            "open, are you sure you want to delete?"
+            'open, are you sure you want to delete?'
     Ant::Popconfirm(placement: :left, title: title, okText: 'Yes', cancelText: 'No') do
       Ant::Button(type: :danger) { 'Delete' }
     end.on(:Confirm) { person.destroy }
@@ -9,42 +9,48 @@ class ShowPeople < HyperComponent
 
   def columns
     @columns ||= [
-      { value: 'name', sorter: ->(a, b) { (a.name <=> b.name) } }, # specify the method
-      { title: 'Years', value: 'age', sorter: true,
-        filters: [{text: 'under 50', value: true}], filter: ->(value, record) { !value || record.age.to_i < 50 } }, # or use the default sort function
+      { value: 'name', sorter: ->(a, b) { (a.name <=> b.name) } }, # specify the sort method
+      {
+        title: 'Years', value: 'age', sorter: true, # or use the default sort function
+        filters: [{ text: 'under 50', value: true }],
+        filter: ->(value, record) { !value || record.age.to_i < 50 }
+      },
       { title: 'Address', value: 'address' },
       {
         title: 'Open Tasks', value: 'tasks.incomplete.count',
-        sorter: :remote#, filters: [{text: 'with open tasks', value: true}],
-        #filter: ->(value, record) { !value || record.tasks.incomplete.count.positive? }
+        sorter: :remote
       },
       { key: :action, render: method(:delete_person) }
     ]
   end
 
-  before_mount { @sort_by = :sorted_by_tasks_incomplete_count; @sort_order = :ASC }
+  # demonstrates how to sort server side.
+  # which we do only for the tasks-incomplete-count column
+
+  before_mount do
+    @sort_by = :sorted_by_tasks_incomplete_count
+    @sort_order = :ASC
+  end
 
   define_method :handle_change do |p, f, s|
     field = s[:field]
     order = s[:order]
-    # field = `s['field'] || #{nil}`
-    # order = `s['order'] || #{nil}`
-
-    puts "sorting on #{field&.underscore} #{order}"
     next unless field == 'tasks-incomplete-count'
 
-    @sort_by = "sorted_by_#{field.underscore}"
-    @sort_order = order == 'descend' ? :DESC : :ASC
-    mutate
+    mutate do
+      @sort_by = "sorted_by_#{field.underscore}"
+      @sort_order = order == 'descend' ? :DESC : :ASC
+    end
+  end
+
+  def sorted_records
+    Person.send(@sort_by, @sort_order)
   end
 
   DIV do
-    puts "Person.send(#{@sort_by}, #{@sort_order})"
-    Ant::Table(:accordion, records: Person.send(@sort_by, @sort_order), columns: columns) #, onChange: method(:handle_change).to_proc)
+    Ant::Table(:accordion, records: sorted_records, columns: columns)
     .on(:expand_row) { |owner| ShowTasks(owner: owner) }
-    .on(:change) do |p, f, s|
-      handle_change(p, f, s)
-    end
+    .on(:change) { |p, f, s| handle_change(p, f, s) }
     AddPerson()
   end
 end

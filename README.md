@@ -13,11 +13,11 @@ You should be able to
 
 Most of Ant Design is easily accessible to Hyperstack.  Here we use the `Button`, `Form`, `Input`, `Collapse`, `Table` and many other components.
 
-While `Table` is easily accessible, its data input is a plain (but complex) JSON object, so to allow an easy interface between our ActiveRecord models and Ant Tables, we build a `Ant::Table` wrapper, that uses
+While the `Table` is easily accessible, its data input is a plain (but complex) JSON object. To allow an easy interface between our ActiveRecord models and Ant Tables, we build a `Ant::Table` wrapper, that uses
 a modified Ant Design Table column description to pull the data out of our ActiveRecord collection.
 
 The wrapped `Ant::Table` allows for filtering, sorting, conditional rendering, accordion style expansion of table rows, etc.
 
-The app also demonstrates use of the WhileLoading module to display a Spinner while data is loading
-
 Like any Hyperstack app, data synchronization between all clients and the server is automatic.
+
+The application has been deployed to Heroku and you can play with it here:  http://antmagic.herokuapp.com/
