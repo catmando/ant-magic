@@ -1,10 +1,11 @@
+require 'delegate'
 # Wrap the Ant Library
 # Most of the Ant Components can be used as is.
 # However Ant::Table needs some massaging of the data
-# To make it easier to use, and can be used directly with Active Records
+# to make it easier to use, and so it can be used directly with Active Records
 class Ant < Hyperstack::Component::NativeLibrary
   imports 'Ant'
-  rename Table: :NativeTable
+  rename Table: :NativeTable # access the original Table via :NativeTable
 
   # Wrapper for Ant Table component so it works with AR records
   class Table < HyperComponent
@@ -43,8 +44,81 @@ class Ant < Hyperstack::Component::NativeLibrary
 
     def normalized_columns
       @normalized_columns ||= columns.collect do |column|
-        normalize_column column if column
+        NormalizedColumn.new(column) if column
       end.compact
+    end
+
+    # NormalizedColumn is a hash that has been converted so that all keys and values
+    # are as expected by NativeTable.
+    class NormalizedColumn < ::SimpleDelegator
+      def initialize(column)
+        if !column.is_a?(::Hash)
+          super title: column.humanize, value: column.split('.')
+        else
+          super column.dup
+          @column = column
+          normalize!
+        end
+      end
+
+      private
+
+      def normalize!
+        set_title_and_value
+        wrap_render_proc
+        camelize_keys
+        set_data_index
+        wrap_filter_proc
+        wrap_sorter_proc
+      end
+
+      def set_title_and_value
+        if @column[:value]
+          self[:title] ||= @column[:value].humanize
+          self[:value] = @column[:value].split('.')
+        elsif @column[:key]
+          self[:title] ||= self[:key].humanize
+        end
+      end
+
+      def wrap_render_proc
+        self[:render] &&= ->(_, _r, i) { @column[:render].call( `_r['_record']`, i).to_n }
+      end
+
+      def camelize_keys(_, c)
+        keys.each { |key| self[key.camelize(:lower)] = self[key] }
+      end
+
+      def set_data_index
+        self[:dataIndex] ||= self[:value].join('-') if self[:value]
+      end
+
+      def get_data(r)
+        # during the conversion from ruby hash to json object, nil will be converted
+        # to null.  Coming back it doesn't work, since JS null has no properties.  So
+        # we have this little helper function to grab the value and check it for null.
+        `r[#{self[:dataIndex]}] || #{nil}`
+      end
+
+      def wrap_filter_proc
+        if @column[:filter]
+          self[:onFilter] = ->(v, r) { @column[:filter].call(v, `r['_record']`) }
+        elsif @column[:filters]
+          self[:onFilter] = ->(v, r) { get_data(r) == v }
+        end
+      end
+
+      def wrap_sorter_proc
+        return unless @column[:sorter]
+
+        if @column[:sorter].respond_to? :call
+          self[:sorter] = ->(a, b, o) { @column[:sorter].call(`a['_record']`, `b['_record']`, o) }
+        elsif self[:sorter] == :remote
+          self[:sorter] = true
+        else
+          self[:sorter] = ->(a, b) { get_data(a) <=> get_data(b) }
+        end
+      end
     end
 
     NATIVE_COLUMN_KEYS = %i[
@@ -55,6 +129,8 @@ class Ant < Hyperstack::Component::NativeLibrary
     ]
 
     def native_columns
+      # filter out all columns that are not expected by the NativeTable
+      # and convert to hash to a native json object
       @native_columns ||= normalized_columns.collect do |column|
         column.dup.tap do |native_column|
           native_column.delete_if { |k, _v| !NATIVE_COLUMN_KEYS.include?(k) }
@@ -62,69 +138,46 @@ class Ant < Hyperstack::Component::NativeLibrary
       end.to_n
     end
 
-    def get_data(_r, col)
-      # during the conversion from ruby hash to json object, nil will be converted
-      # to null.  Coming back it doesn't work, since JS null has no properties.  So
-      # we have this little helper function to grab the value and check it for null.
-      `_r[#{col[:dataIndex]}] || #{nil}`
-    end
+    def current_data_source
+      # Get the current LOADED data source formatted correctly for the native Table
+      # component.  If the data is still loading, then fall back to the previous
+      # data (or an empty data set), and set the loading flag.
 
-    def set_title_and_value(column, c)
-      if column[:value]
-        c[:title] ||= column[:value].humanize
-        c[:value] = column[:value].split('.')
-      elsif c[:key]
-        c[:title] ||= c[:key].humanize
-      end
-    end
-
-    def camelize_keys(_, c)
-      c.keys.each { |key| c[key.camelize(:lower)] = c[key] }
-    end
-
-    def set_data_index(_, c)
-      c[:dataIndex] ||= c[:value].join('-') if c[:value]
-    end
-
-    def wrap_render_proc(column, c)
-      c[:render] &&=
-        ->(_, _r, i) { column[:render].call( `_r['_record']`, i).to_n }
-    end
-
-    def wrap_filter_proc(column, c)
-      if column[:filter]
-        c[:onFilter] = ->(v, r) { column[:filter].call(v, `r['_record']`) }
-      elsif column[:filters]
-        c[:onFilter] = ->(v, r) { get_data(r, c) == v }
-      end
-    end
-
-    def wrap_sorter_proc(column, c)
-      return unless column[:sorter]
-
-      if column[:sorter].respond_to? :call
-        c[:sorter] = ->(a, b, o) { column[:sorter].call(`a['_record']`, `b['_record']`, o) }
-      elsif c[:sorter] == :remote
-        c[:sorter] = true
+      # Hyperstack will automatically re-render the component when all the data is
+      # loaded, which will rerun this method.
+      new_data_source = format_data_source
+      if data_source_loaded?(new_data_source)
+        @previous_data_source = @current_data_source
+        @current_data_source = new_data_source.to_n
+        { dataSource: @current_data_source }
       else
-        c[:sorter] = ->(a, b) { get_data(a, c) <=> get_data(b, c) }
+        { dataSource: @previous_data_source || [], loading: true }
       end
     end
 
-    def normalize_column(column)
-      return { title: column.humanize, value: column.split('.') } unless column.is_a?(Hash)
+    def data_source_loaded?(data_source)
+      # The loading? method will return true for any object that is
+      # waiting to be loaded.
+      !data_source.detect { |column| column.values.detect(&:loading?) }
+    end
 
-      column.dup.tap do |c|
-        set_title_and_value(column, c)
-        wrap_render_proc(column, c)
-        camelize_keys(column, c)
-        set_data_index(column, c)
-        wrap_filter_proc(column, c)
-        wrap_sorter_proc(column, c)
+    def format_data_source
+      # Retrieve a hash of all the values from active record models specified by the
+      # normalized columns.
+      # The resulting hash will be in the form
+      # { :key => record.to_key.to_s, :_record => record, key1 => value1, ... keyN => valueN }
+      records.each_with_index.collect do |record, i|
+        # the following works around issue https://github.com/hyperstack-org/hyperstack/issues/254
+        columns.each { |column| column[:render]&.call(record, i)&.as_node rescue nil}
+        expand_row!(record, i).as_node rescue nil
+
+        # its critical that the key is a string for Ant::Table to work
+        Hash[[[:key, record.to_key.to_s], [:_record, record]] + gather_values(record)]
       end
     end
 
     def gather_values(record)
+      # Retrieve an array of pairs (ready to convert to a hash) of key, value pairs
       normalized_columns.collect do |column|
         next unless column[:value]
 
@@ -135,38 +188,34 @@ class Ant < Hyperstack::Component::NativeLibrary
       end.compact
     end
 
-    def format_data_source
-      records.each_with_index.collect do |record, i|
-        # this works around issue https://github.com/hyperstack-org/hyperstack/issues/254
-        columns.each { |column| column[:render]&.call(record, i)&.as_node rescue nil}
-        expand_row!(record, i).as_node rescue nil
+    def expanded_row_keys
+      # Handles accordion mode (which is extension provided by the wrapper)
 
-        # its critical that the key is a string for Ant::Table to work
-        Hash[[[:key, record.to_key.to_s], [:_record, record]] + gather_values(record)]
-      end
-    end
+      # Ant::NativeTable takes an optional expandedRowKeys parameter which is an
+      # array of rows to be expanded, and fires the onExpandedRowsChange callback
+      # when ever the user expands or collapses a row.
 
-    def data_source_loaded?(data_source)
-      !data_source.detect { |column| column.values.detect(&:loading?) }
-    end
+      # Normally Ant::NativeTable allows multiple rows to be open, so it will
+      # push a new row key on the end of keys list when a row is expanded,
+      # and remove the key when the row is collapsed. In accordion mode we keep
+      # the value of @expanded_row_keys as the last row expanded, or nil if all
+      # rows are collapsed.
 
-    def current_data_source
-      new_data_source = format_data_source
-      if data_source_loaded?(new_data_source)
-        @previous_data_source = @current_data_source
-        @current_data_source = new_data_source.to_n
-        { dataSource: @current_data_source }
-      elsif @previous_data_source
-        { dataSource: @previous_data_source, loading: true }
-      else
-        { dataSource: [], loading: true }
-      end
+      return unless accordion
+
+      {
+        expandedRowKeys: @expanded_row_keys || [],
+        onExpandedRowsChange: ->(keys) { mutate @expanded_row_keys = keys[-1..-1] }
+      }
     end
 
     render(DIV) do
       Ant::NativeTable(
+        # note that Hypermesh will merge all parameters passed to a component as a single
+        # hash, ignoring any falsy values.  This is handy to build the parameter list
+        # in a HOC like this
         etc,
-        accordion && { expandedRowKeys: @expanded_row_keys || [] },
+        expanded_row_keys,
         current_data_source,
         columns: native_columns
       ) # if expand_row handler is provided add the expandedRowRender callback
@@ -174,9 +223,6 @@ class Ant < Hyperstack::Component::NativeLibrary
         # the above looks a little clunky - see https://github.com/hyperstack-org/hyperstack/issues/247
         # which would give us expand_row_provided?
         expand_row!(r[:_record], i).to_n
-      end
-      .on(accordion && '<onExpandedRowsChange>') do |keys|
-        mutate @expanded_row_keys = keys[-1..-1]
       end
     end
   end
